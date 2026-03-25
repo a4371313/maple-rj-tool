@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>羅密歐與茱麗葉助手</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .user-select { margin-bottom: 20px; display: flex; gap: 10px; }
+        .user-btn { padding: 10px; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        .grid { display: grid; grid-template-columns: repeat(4, 70px); gap: 10px; }
+        .cell { width: 70px; height: 50px; background: #333; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 2px solid transparent; transition: 0.2s; }
+        /* 各玩家顏色 */
+        .color-red { background: #ff4d4d !important; color: white; }
+        .color-blue { background: #4d94ff !important; color: white; }
+        .color-yellow { background: #ffdb4d !important; color: black; }
+        .color-green { background: #4dff88 !important; color: black; }
+        .is-correct { border: 3px solid #fff !important; box-shadow: 0 0 10px #fff; }
+        .status-mark { font-size: 18px; font-weight: bold; }
+        .active-user { outline: 3px solid white; }
+    </style>
+</head>
+<body>
+    <h2>R&J 跳躍助手</h2>
+    
+    <div class="user-select" id="userSelect">
+        <button class="user-btn" style="background:#ff4d4d" onclick="setUser('red')">隊員1</button>
+        <button class="user-btn" style="background:#4d94ff" onclick="setUser('blue')">隊員2</button>
+        <button class="user-btn" style="background:#ffdb4d" onclick="setUser('yellow')">隊員3</button>
+        <button class="user-btn" style="background:#4dff88" onclick="setUser('green')">隊員4</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <button onclick="resetAll()" style="margin-top:30px; padding:10px;">全部重置</button>
+
+    <script>
+        // --- 這裡貼上你的 Firebase Config ---
+        const firebaseConfig = {
+  apiKey: "AIzaSyA4tpNZoDPRVyPdNOJHqPUVD42fFBpna7w",
+  authDomain: "maple-rj-tool.firebaseapp.com",
+  databaseURL: "https://maple-rj-tool-default-rtdb.firebaseio.com",
+  projectId: "maple-rj-tool",
+  storageBucket: "maple-rj-tool.firebasestorage.app",
+  messagingSenderId: "185955997956",
+  appId: "1:185955997956:web:9e90b9bc117736865b5851",
+  measurementId: "G-KCTJCGGQRV"
+        };
+        // ----------------------------------
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentUser = localStorage.getItem('rj-user') || null;
+
+        function setUser(color) {
+            currentUser = color;
+            localStorage.setItem('rj-user', color);
+            document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('active-user'));
+            event.target.classList.add('active-user');
+        }
+
+        // 建立 10x4 格子 (從第 10 階到第 1 階)
+        const grid = document.getElementById('grid');
+        for (let r = 10; r >= 1; r--) {
+            for (let c = 1; c <= 4; c++) {
+                const cell = document.createElement('div');
+                cell.id = `step-${r}-${c}`;
+                cell.className = 'cell';
+                cell.innerText = `${r}-${c}`;
+                cell.onclick = () => handleClick(r, c);
+                grid.appendChild(cell);
+            }
+        }
+
+        function handleClick(r, c) {
+            if (!currentUser) return alert('請先選擇你的顏色！');
+            const path = `steps/s${r}_${c}`;
+            db.ref(path).once('value', snapshot => {
+                const val = snapshot.val();
+                if (!val) {
+                    db.ref(path).set({ user: currentUser, status: 'wrong' });
+                } else if (val.status === 'wrong') {
+                    db.ref(path).update({ status: 'correct' });
+                } else {
+                    db.ref(path).remove(); // 第三次點擊重置
+                }
+            });
+        }
+
+        function resetAll() { if(confirm('確定要清空所有紀錄嗎？')) db.ref('steps').remove(); }
+
+        // 監聽雲端資料變化
+        db.ref('steps').on('value', snapshot => {
+            document.querySelectorAll('.cell').forEach(c => {
+                c.className = 'cell';
+                c.innerHTML = c.id.replace('step-', '');
+            });
+            const data = snapshot.val();
+            if (data) {
+                for (let key in data) {
+                    const [r, c] = key.replace('s', '').split('_');
+                    const dom = document.getElementById(`step-${r}-${c}`);
+                    dom.classList.add(`color-${data[key].user}`);
+                    if (data[key].status === 'correct') {
+                        dom.classList.add('is-correct');
+                        dom.innerHTML = 'O';
+                    } else {
+                        dom.innerHTML = 'X';
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
